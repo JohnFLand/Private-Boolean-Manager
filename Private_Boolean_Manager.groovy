@@ -52,7 +52,7 @@ definition(
     oauth:          true,
     iconUrl:   '',
     iconX2Url: '',
-    importUrl: ""
+    importUrl: "https://raw.githubusercontent.com/JohnFLand/Private-Boolean-Manager/refs/heads/main/Private_Boolean_Manager_1_1.groovy"    
 )
 
 preferences {
