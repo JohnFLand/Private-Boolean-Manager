@@ -6,7 +6,7 @@ A [Hubitat Elevation](https://hubitat.com/) app that scans all Rule Machine (RM)
 
 ## Screenshot
 
-Private Boolean Manager screenshot](Screenshot@202026-05-10#20164422.png)
+Private Boolean Manager screenshot](Screenshot#202026-05-10#20164422.png)
 
 ---
 
