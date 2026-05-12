@@ -127,12 +127,15 @@ As with bulk apply, the toggle updates the table immediately and does not re-rea
 
 ### Scheduled PB Apply
 
-In the **Controls** section, set a time under **Apply PB changes daily at:** and click **Done**. Each day at that time, the app applies whichever Set TRUE / Set FALSE checkboxes are currently saved. This uses the same saved checkbox state as **Apply selected PB changes**.
+Three independent schedule options are available in the **Controls** section. Any combination can be active at the same time. Each applies whichever Set TRUE / Set FALSE checkboxes are currently saved — the same state used by **Apply selected PB changes**.
 
-- The last scheduled run timestamp appears below the time field after the first run.
-- TRUE/FALSE counts from the last scheduled run are shown when available.
-- To remove the schedule, clear the time field and click **Done**.
-- Scheduled changes are fire-and-forget and are not verified by re-reading rule state.
+| Option | How to configure |
+|--------|-----------------|
+| **Daily at a specific time** | Set a time in **Apply PB changes daily at:** and click Done |
+| **Every N minutes** | Choose an interval (1, 2, 5, 10, 15, 20, 30, or 60 minutes) from **Apply PB changes every:** and click Done |
+| **After hub reboot** | Enable **Apply PB changes after hub reboot** and optionally set a delay (0–60 minutes); click Done |
+
+The last run timestamp and TRUE/FALSE counts appear below the schedule inputs after the first run. Clear or disable a schedule and click Done to remove it. Scheduled changes are fire-and-forget and are not verified by re-reading rule state.
 
 ---
 
@@ -154,8 +157,27 @@ Reports use the cached data from the most recent scan. If PB-use detections are 
 | **App instance name** | Rename this app instance |
 | **Open Printable Report** | Open a printable HTML report after a scan |
 | **Download CSV** | Download a CSV export after a scan |
-| **Apply PB changes daily at:** | Optional daily schedule for automatic PB apply |
+| **Apply PB changes daily at:** | Optional daily schedule |
+| **Apply PB changes every:** | Optional interval schedule (1–60 minutes) |
+| **Apply PB changes after hub reboot** | Optional post-reboot apply, with configurable delay |
 | **Enable debug logging** | Turns on verbose debug output to the Hubitat log; auto-disables after 30 minutes |
+
+---
+
+## Debug Logging
+
+When **Enable debug logging** is turned on in the Controls section, the following additional output appears in the Hubitat log:
+
+- **Per-rule Phase 1 results** — rule name, ID, app type, and Private Boolean value for each rule as it is scanned
+- **Per-rule Phase 2 results** — PB-use detection result (`pbUsed=true/false`) for each rule's `configure/json` response
+- **Phase 2 heartbeat resets** — each time the Phase 2 watchdog timer is reset by a completed callback
+- **Single-rule PB toggle confirmations** — the rule ID and action when a Current PB State cell is clicked
+- **Lifecycle events** — logged at install time and on each Done press (includes current label and whether a scan was active)
+- **Rule discovery count** — number of RM/BC rules found by `/hub2/appsList` before scanning begins
+- **Schedule setup confirmations** — daily time, interval, and systemStart subscription status on each Done press
+- **Re-render-from-cache confirmations** — when the table is rebuilt from cached data on Done press
+
+Debug logging auto-disables after 30 minutes to avoid filling the hub log.
 
 ---
 
