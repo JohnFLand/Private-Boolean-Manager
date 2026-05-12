@@ -9,6 +9,7 @@ A [Hubitat Elevation](https://hubitat.com/) app for Rule Machine (RM) and Button
 
 ## Screenshot
 ![Private Boolean Manager screenshot](Screenshot_2026-05-10_164422.png) 
+Screenshot_2026-05-10_164422.png
 ---
 
 ## Installation
