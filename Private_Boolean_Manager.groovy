@@ -15,7 +15,9 @@
  *      /installedapp/statusJson/{appId}
  *      /installedapp/configure/json/{appId}   (PB use detection)
  *      /apps/api/{thisAppId}/setPB?id={ruleId}&value=true|false
- *      /apps/api/{thisAppId}/setpref?key={prefKey}&value=true|false
+ *      /apps/api/{thisAppId}/bulkPB?trueIds={csv}&falseIds={csv}
+ *      /apps/api/{thisAppId}/setpref?key={prefKey}&value={prefValue}
+ *          (UI preferences and JSON-encoded checkbox state)
  *      /apps/api/{thisAppId}/report
  *      /apps/api/{thisAppId}/RM-BC_Rules.csv
  *  - Some of these endpoints are not a formal public API and could change in a
@@ -52,11 +54,10 @@ import groovy.transform.CompileStatic
 @Field static Integer   configureInFlight       = 0      // number of configure/json requests currently in flight
 @Field static Integer   configureTotalRules     = 0      // total number of rules expected in Phase 2
 @Field static Map       configureInflight       = [:]    // ruleId -> [startedMs, name], for dropped-response watchdog
-@Field static Long      configureLastProgressMs = 0L
 
 definition(
-    name:        "Private Boolean Manager v. 1.47",
-    namespace:   "johnland",
+    name:        "Private Boolean Manager v. 1.50",
+    namespace:   "John Land",
     author:      "John Land & AI",
     description: "Scans RM/BC rules, reports Private Boolean state and Last Run time, and sets Private Boolean values in bulk or from the report table.",
     category:    "Utility",
@@ -136,9 +137,8 @@ void initialize() {
     configureInFlight       = 0
     configureTotalRules     = 0
     configureInflight       = [:]
-    configureLastProgressMs = 0L
 
-    // Set or clear the PB apply schedules (daily and/or interval).
+    // Set or clear the PB apply schedules (daily, interval, and/or post-reboot).
     unschedule("scheduledApplyPB")
     unschedule("scheduledApplyPBInterval")
 
@@ -181,11 +181,11 @@ void logsOff() {
 }
 
 // ============================================================
-// Scheduled daily PB apply
+// Scheduled / interval / reboot PB apply
 // ============================================================
 // Reads the checkbox state persisted by the table UI and applies it
-// identically to "Apply selected PB changes". Runs at the time set
-// in the Controls section; scheduled/unscheduled via initialize().
+// identically to "Apply selected PB changes". Scheduled daily, interval,
+// and post-reboot wrappers all delegate here.
 
 void scheduledApplyPB() {
     log.info "PBM: Scheduled PB apply triggered."
@@ -430,11 +430,8 @@ def mainPage() {
     checkOAuth()
 
     int pollInterval = (currentScanId || configureScanId) ? 5 : 0
-    dynamicPage(name: "mainPage", title: "", install: true, uninstall: true, refreshInterval: pollInterval) {
 
-        section("") {
-            paragraph "<b style='font-size:1.1em;'>${app.name}</b>"
-        }
+    dynamicPage(name: "mainPage", title: "<b>${app.name}</b>", install: true, uninstall: true, refreshInterval: pollInterval) {
 
         section("NOTE: Scanning may take a while, be patient!") {
             input name: "btnScan",     type: "button", title: "Scan All Rules for Current PB State", width: 7
@@ -523,7 +520,6 @@ def mainPage() {
                 paragraph "<small>OAuth setup required before reports are available.</small>"
             }
 
-            // ── Debug logging (last) ──────────────────────────────────────
             // ── Scheduled PB apply ───────────────────────────────────────
             paragraph "<br><b>Scheduled PB Apply</b>"
             paragraph "<small>Applies the current Set TRUE / Set FALSE checkbox selections on the chosen schedule(s). Both options can be active simultaneously. Clear a field and press Done to disable that schedule.</small>"
@@ -590,8 +586,7 @@ def mainPage() {
                 
                 The <b>All TRUE</b>, <b>All FALSE</b>, and <b>All Clear</b> buttons skip hidden rows. 
                 
-                The states of the <b>Hide columns</b> buttons and wildcard name filter above the 
-                table persist without clicking <b>Done</b>.
+                The states of the <b>Hide columns</b> buttons above the table persist without clicking <b>Done</b>.
                 <br>
                 <b>Setting Private Booleans (checkbox columns)</b><br>
                 Each table row has a <b>Set TRUE</b> and <b>Set FALSE</b> checkbox.
@@ -619,7 +614,7 @@ def mainPage() {
                 or trigger. Each cell shows "—" before any usage scan. 
                 
                 After a <b>Scan for Actual PB Use</b> scan [this is a combined Phase 1 and 2 scan], 
-                cells show a green ✓ (use detected) or "—" (not detected).
+                cells show a green ✓ (use detected), "—" (not detected), or "?" (unknown/skipped).
 
                 After a Phase 2 scan, running a <b>Scan All Rules for Current PB State</b> scan
                 [i.e, a Phase 1 scan only] causes prior PB Use detections to be shown as a red ✓ 
@@ -763,9 +758,7 @@ void scanRules(boolean doUsage = false) {
     List<Map> queue = ruleApps.collect { Map r ->
         [id       : r.id                 as String,
          name     : r.name               as String,
-         appType  : (r.appType ?: "RM")  as String,
-         disabled : r.disabled           as Boolean,
-         paused   : r.paused             as Boolean]
+         appType  : (r.appType ?: "RM")  as String]
     }
 
     state.scanStatus = "<i>Scan started: ${scanStartTime} — scanning ${queue.size()} rules…</i>"
@@ -785,8 +778,6 @@ void scanRules(boolean doUsage = false) {
          ruleId     : first.id,
          ruleName   : first.name,
          appType    : first.appType,
-         disabled   : first.disabled,
-         paused     : first.paused,
          nextIdx    : 1,
          totalRules : queue.size()]
     )
@@ -832,8 +823,6 @@ void handleStatusResponse(resp, data) {
             id          : ruleId,
             name        : data.ruleName,
             appType     : data.appType,
-            disabled    : data.disabled,
-            paused      : data.paused,
             lastRun     : extractLastRun(status),
             privateBool : privateBool       // null = HTTP error; false = unset (RM default); true = set
         ]
@@ -845,8 +834,6 @@ void handleStatusResponse(resp, data) {
             id          : ruleId,
             name        : data.ruleName as String,
             appType     : (data.appType ?: "RM") as String,
-            disabled    : data.disabled as Boolean,
-            paused      : data.paused as Boolean,
             lastRun     : "",
             privateBool : null,
             pbUsed      : null
@@ -869,8 +856,6 @@ void handleStatusResponse(resp, data) {
                  ruleId     : nextRule.id                 as String,
                  ruleName   : nextRule.name               as String,
                  appType    : (nextRule.appType ?: "RM")  as String,
-                 disabled   : nextRule.disabled           as Boolean,
-                 paused     : nextRule.paused             as Boolean,
                  nextIdx    : nextIdx + 1,
                  totalRules : totalRules]
             )
@@ -882,8 +867,6 @@ void handleStatusResponse(resp, data) {
 
 void resetConfigureHeartbeat(String reason = "") {
     if (configureScanId == null) return
-
-    configureLastProgressMs = now() as Long
 
     unschedule("configureHeartbeat")
     runIn(CONFIGURE_HEARTBEAT_SECS, "configureHeartbeat")
@@ -1124,7 +1107,6 @@ void finalizeUsageScan() {
         configureInFlight       = 0
         configureTotalRules     = 0
         configureInflight       = [:]
-        configureLastProgressMs = 0L
         state.scanStartedMs     = null
         state.phase1EndedMs     = null
     }
@@ -1142,7 +1124,6 @@ void finalizeScan() {
         log.warn "No statusJson response for ${rule.id} (${rule.name}) — Private Boolean state is unknown"
         return [id: rule.id as String, name: rule.name as String,
                 appType: (rule.appType ?: "RM") as String,
-                disabled: rule.disabled as Boolean, paused: rule.paused as Boolean,
                 lastRun: "", privateBool: null, pbUsed: null]
     }
 
@@ -1295,9 +1276,7 @@ private void collectRmLeafRules(Object node, String parentAppType, List<Map> rul
                 rules << [
                     id       : id,
                     name     : ruleName,
-                    appType  : finalAppType,
-                    disabled : asBooleanLoose(d.disabled),
-                    paused   : ruleName.contains("(Paused)")
+                    appType  : finalAppType
                 ]
             }
         }
@@ -1335,21 +1314,36 @@ String getSupportedAutomationAppType(String type, String name, String label = ""
 }
 
 // ── Preference persistence endpoint ─────────────────────────────────────────
-// Called by toggle-bar buttons via fetch() to persist their state without a
-// page reload. Values are stored in state.userPrefs and read via getPref().
+// Called by toggle-bar buttons and checkbox JS via fetch() to persist UI state
+// without a page reload. Values are stored in state.userPrefs and read via
+// getPref() / getPrefString().
 def handleSetPrefEndpoint() {
-    if (!state.accessToken) { render contentType: "application/json", data: '{"status":"error","message":"OAuth not active"}'; return }
+    if (!state.accessToken) return renderJson([status: "error", message: "OAuth not active"])
+
     String key   = params?.key?.toString()
     String value = params?.value?.toString()
-    if (!key) { render contentType: "application/json", data: '{"status":"error","message":"missing key"}'; return }
+    if (!key) return renderJson([status: "error", message: "missing key"])
+
+    Set allowedKeys = [
+        "hideColRuleId",
+        "hideColAppType",
+        "hideColPB",
+        "hideColLastRun",
+        "hideColPbUsed",
+        "pbCheckboxState"
+    ] as Set
+
+    if (!(key in allowedKeys)) {
+        return renderJson([status: "error", message: "unsupported preference key"])
+    }
+
     Map prefs = (state.userPrefs ?: [:]) as Map
     prefs[key] = value
     state.userPrefs = prefs
-    render contentType: "application/json", data: '{"status":"success"}'
+    return renderJson([status: "success"])
 }
 
-// Read a toggle-bar preference. Priority: state.userPrefs (set by JS click) →
-// settings.* (legacy Done-saved value) → defaultVal.
+// Read a toggle-bar preference. Priority: state.userPrefs (set by JS click) → defaultVal.
 boolean getPref(String key, boolean defaultVal = false) {
     Map prefs = (state.userPrefs ?: [:]) as Map
     if (prefs.containsKey(key)) return prefs[key]?.toString() == "true"
@@ -1444,7 +1438,10 @@ String buildRmPrintHtml() {
         sb << "<td class='c'>${htmlEncode(r.appType ?: "")}</td>"
         sb << "<td class='c'>${pbFmt(r.privateBool)}</td>"
         Boolean pbUsedVal = r.pbUsed == null ? null : (r.pbUsed as Boolean)
-        String  pbUsedPrint = (pbUsedVal == null) ? "—" : pbUsedVal ? ((r.pbUsedStale == true) ? "Yes (stale)" : "Yes") : "No"
+        boolean pbUseScanFinished = (state.pbUseScanned == true && state.pbUseUnknownCount != null)
+        String  pbUsedPrint = (pbUsedVal == null)
+            ? (pbUseScanFinished ? "?" : "—")
+            : pbUsedVal ? ((r.pbUsedStale == true) ? "Yes (stale)" : "Yes") : "No"
         sb << "<td class='c'>${pbUsedPrint}</td>"
         sb << "<td class='c'>${htmlEncode(r.lastRun ?: "")}</td>"
         sb << "</tr>"
@@ -1466,7 +1463,8 @@ String buildRmCsv() {
     rows.each { Map r ->
         sb << "${escapeCsv(r.id)},${escapeCsv(r.name)},${escapeCsv(r.appType)}"
         sb << ",${r.privateBool == null ? "—" : (r.privateBool as Boolean) ? "TRUE" : "FALSE"}"
-        String pbUseCsv = (r.pbUsed == null) ? "—" :
+        boolean pbUseScanFinished = (state.pbUseScanned == true && state.pbUseUnknownCount != null)
+        String pbUseCsv = (r.pbUsed == null) ? (pbUseScanFinished ? "?" : "—") :
                           ((r.pbUsed as Boolean) ? ((r.pbUsedStale == true) ? "Yes (stale)" : "Yes") : "No")
         sb << ",${escapeCsv(pbUseCsv)}"
         sb << ",${escapeCsv(r.lastRun)}\n"
@@ -1942,7 +1940,7 @@ String buildReportHtml(List<Map> rows) {
     }
 
     // PB Use Detected column is always visible: shows — before any usage scan,
-    // fresh green ✓ / — after Phase 2, or stale red ✓ after Phase 1 with prior Phase 2 data.
+    // fresh green ✓ / — / ? after Phase 2, or stale red ✓ after Phase 1 with prior Phase 2 data.
 
     // Read custom column visibility settings
     boolean cfgHideColRuleId  = getPref("hideColRuleId",  false)
@@ -2039,13 +2037,17 @@ String buildReportHtml(List<Map> rows) {
         sb << pbTd
         // PB Use Detected cell: always rendered.
         // Fresh ✓ (Phase 2 current): green.  Stale ✓ (Phase 2 prior, Phase 1 scan since): red.
+        // ? means Phase 2 attempted the rule but configure/json was unknown/skipped/timed out.
         Boolean pbUsedVal   = r.pbUsed == null ? null : (r.pbUsed as Boolean)
         boolean pbUsedStale = r.pbUsedStale == true
+        boolean pbUseScanFinished = (state.pbUseScanned == true && state.pbUseUnknownCount != null)
         String  pbUsedColor = pbUsedStale ? "#c00" : "green"
         String  pbUsedDisp  = (pbUsedVal == true)
             ? "<span style='color:${pbUsedColor};font-weight:bold;'>&#10003;</span>"
-            : "<span style='color:#aaa;'>—</span>"
-        String  pbUsedSort  = (pbUsedVal == true) ? "2" : "0"
+            : ((pbUsedVal == null && pbUseScanFinished)
+                ? "<span title='PB use unknown/skipped' style='color:#c00;font-weight:bold;'>?</span>"
+                : "<span style='color:#aaa;'>—</span>")
+        String  pbUsedSort  = (pbUsedVal == true) ? "2" : ((pbUsedVal == null && pbUseScanFinished) ? "1" : "0")
         sb << "<td class='center rmcol-pbused' data-sort='${pbUsedSort}'>${pbUsedDisp}</td>"
         sb << "<td class='center rmcol-lastrun' data-sort='${lastRun}'>${lastRun}</td>"
         sb << "</tr>"
