@@ -56,17 +56,17 @@ import groovy.transform.CompileStatic
 @Field static Map       configureInflight       = [:]    // ruleId -> [startedMs, name], for dropped-response watchdog
 
 definition(
-    name:        "Private Boolean Manager v. 1.50",
-    namespace:   "John Land",
-    author:      "John Land & AI",
-    description: "Scans RM/BC rules, reports Private Boolean state and Last Run time, and sets Private Boolean values in bulk or from the report table.",
-    category:    "Utility",
+    name:           "Private Boolean Manager 1.50",
+    namespace:      "John Land",
+    author:         "John Land & AI",
+    description:    "Scans RM/BC rules, reports Private Boolean state & Last Run time, and sets Private Boolean values in bulk or from the report table.",
+    category:       "Utility",
     singleInstance: false,
     installOnOpen:  true,
     oauth:          true,
-    iconUrl:   '',
-    iconX2Url: '',
-    importUrl: "https://raw.githubusercontent.com/JohnFLand/Private-Boolean-Manager/refs/heads/main/Private_Boolean_Manager.groovy"    
+    iconUrl:        '',
+    iconX2Url:      '',
+    importUrl:      "https://raw.githubusercontent.com/JohnFLand/Private-Boolean-Manager/refs/heads/main/Private_Boolean_Manager.groovy"    
 )
 
 preferences {
