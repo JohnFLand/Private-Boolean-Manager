@@ -7,12 +7,6 @@ A [Hubitat Elevation](https://hubitat.com/) app for Rule Machine (RM) and Button
 
 ---
 
-## Screenshot
-
-![Private Boolean Manager screenshot](Screenshot_2026-05-10_164422.png)
-
----
-
 ## Installation
 
 1. In the Hubitat web UI, go to **Apps Code → + New App** and paste in the app's Groovy source.
