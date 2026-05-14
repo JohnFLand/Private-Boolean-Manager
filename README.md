@@ -3,12 +3,14 @@
 A [Hubitat Elevation](https://hubitat.com/) app for Rule Machine (RM) and Button Controller (BC) rules. It has two main functions:
 
 1. It scans RM/BC rules and displays each rule's **Private Boolean state**, **PB use detection**, and **Last Run time** in a sortable table.
-2. It lets you set Private Boolean values for multiple rules, either manually from the table or automatically on a daily schedule.
+2. It lets you set Private Boolean values for multiple rules, either manually from the table or automatically on a schedule.
 
 ---
 
 ## Screenshot
+
 ![Private Boolean Manager screenshot](Screenshot_2026-05-10_164422.png)
+
 ---
 
 ## Installation
